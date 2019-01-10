@@ -193,7 +193,7 @@ class LuaState:
     def IsNil(self, index):
         return self.Type(index) == LUATYPE.LUA_TNIL.value
 
-    def ISNoneOrNil(self, index):
+    def IsNoneOrNil(self, index):
         return self.Type(index) <= LUATYPE.LUA_TNIL.value
 
     def IsBoolean(self, index):
