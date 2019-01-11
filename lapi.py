@@ -1,10 +1,37 @@
 from enum import Enum
+from lmath import FloatToInteger, ShiftLeft, ShiftRight
+from math import pow
 
 luatypelist = [(j, i) for i, j in enumerate(['LUA_TNONE', 'LUA_TNIL', 'LUA_TBOOLEAN', 'LUA_TLIGHTUSERDATA',
                                              'LUA_TNUMBER', 'LUA_TSTRING', 'LUA_TTABLE', 'LUA_TFUNCTION',
                                              'LUA_TUSERDATA', 'LUA_TTHREAD'])]
 
 LUATYPE = Enum('LUATYPE', luatypelist)
+arithoplist = [(j, i) for i, j in enumerate(['LUA_OPADD', 'LUA_OPSUB', 'LUA_OPMUL', 'LUA_OPMOD', 'LUA_OPPOW',
+                                             'LUA_OPDIV', 'LUA_OPIDI', 'LUA_OPBAN', 'LUA_OPBOR', 'LUA_OPBXO',
+                                             'LUA_OPSHL', 'LUA_OPSHR', 'LUA_OPUNM', 'LUA_OPBNO'])]
+ARIOPENUM = Enum('ARIOP', arithoplist)
+
+compareoplist = [(j, i) for i, j in enumerate(['LUA_OPEQ', 'LUA_OPLT', 'LUA_OPLE'])]
+COMOPENUM = Enum('COMOP', compareoplist)
+
+iadd = fadd = lambda a, b: a + b
+isub = fsub = lambda a, b: a - b
+imul = fmul = lambda a, b: a * b
+imod = fmod = lambda a, b: a % b
+pow = pow
+div = lambda a, b: a / b
+iidiv = fidiv = lambda a, b: a // b
+band = lambda a, b: a & b
+bor = lambda a, b: a | b
+bxor = lambda a, b: a ^ b
+shl = ShiftLeft
+shr = ShiftRight
+iunm = funm = lambda a: -a
+bnot = lambda a: ~a
+
+arithOperators = [(iadd, fadd), (isub, fsub), (imul, fmul), (imod, fmod), (None, pow), (None, div), (iidiv, fidiv),
+                  (band, None), (bor, None), (bxor, None), (shl, None), (shr, None), (iunm, funm), (bnot, None)]
 
 
 class LuaValue:
@@ -25,6 +52,52 @@ class LuaValue:
             return LUATYPE.LUA_TSTRING.value
         else:
             raise TypeError('UNKONW type')
+
+    def convertToFloat(self):
+        typeOfValue = type(self.value)
+        if typeOfValue is float:
+            return self.value, True
+        elif typeOfValue is int:
+            return float(self.value), True
+        elif typeOfValue is str:
+            return float(str), True
+        else:
+            return 0, False
+
+    def convertToInteger(self):
+        typeOfValue = type(self.value)
+        if typeOfValue is int:
+            return self.value, True
+        elif typeOfValue is float:
+            return FloatToInteger(self.value)
+        elif typeOfValue is str:
+            try:
+                return int(self.value), True
+            except ValueError:
+                return FloatToInteger(float(self.value))
+        else:
+            return 0, False
+
+    @staticmethod
+    def arith(a,b,op):
+        if op[1] is None:
+            x, aok = a.convertToInteger()
+            if aok:
+                y, bok = b.convertToInteger()
+                if bok:
+                    return op[0](x,y)
+        else:
+            if op[0] is not None:
+                return op[0](int(a),int(b))
+            x, aok = a.convertToFloat()
+            if aok:
+                y,bok = b.convertToFloat()
+                if bok:
+                    return op[1](x,y)
+        return None
+
+
+
 
     def __str__(self):
         return self.value
@@ -77,7 +150,6 @@ class LuaStack:
             self.slots[absIndex - 1] = luavalue
             return
         raise IndexError('invalid index')
-
 
     def reverse(self, fromindex, toindex):
         # slots = self.slots
@@ -216,32 +288,38 @@ class LuaState:
         return self.ToNumberX(index)[0]
 
     def ToNumberX(self, index):
-        value = self.stack.get(index).value
-        valueType = type(value)
-        if valueType is int:
-            return value, True
-        elif valueType is float:
-            return float(value), True
-        else:
-            return 0, False
+        luavalue = self.stack.get(index)
+        return luavalue.convertToFloat()
 
-    def ToInteger(self,index):
+    def ToInteger(self, index):
         return self.ToIntegerX(index)[0]
 
-    def ToIntegerX(self,index):
-        return int(self.stack.get(index).value),type(self.stack.get(index).value) is int
+    def ToIntegerX(self, index):
+        return self.stack.get(index).convertToInteger()
 
-    def ToStringX(self,index):
+    def ToStringX(self, index):
         value = self.stack.get(index).value
         valueType = type(value)
         if valueType is str:
-            return value,True
+            return value, True
         elif valueType is int or valueType is float:
             toStrValue = str(value)
-            self.stack.set(index,toStrValue)
-            return toStrValue,True
+            self.stack.set(index, toStrValue)
+            return toStrValue, True
         else:
-            return "",False
+            return "", False
 
-    def ToString(self,index):
+    def ToString(self, index):
         return self.ToStringX(index)[0]
+
+    def Arith(self, op):
+        a = None
+        b = self.stack.pop()
+        if op != ARIOPENUM.LUA_OPUNM.value and op != ARIOPENUM.LUA_OPBNOT.value:
+            a = self.stack.pop()
+        operator = arithOperators[op]
+        result = LuaValue.arith(a,b,operator)
+        if result is not None:
+            self.stack.push(result)
+        else:
+            raise ArithmeticError('arithmetic error')
