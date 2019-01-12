@@ -9,7 +9,7 @@ luatypelist = [(j, i) for i, j in enumerate(['LUA_TNONE', 'LUA_TNIL', 'LUA_TBOOL
 LUATYPE = Enum('LUATYPE', luatypelist)
 arithoplist = [(j, i) for i, j in enumerate(['LUA_OPADD', 'LUA_OPSUB', 'LUA_OPMUL', 'LUA_OPMOD', 'LUA_OPPOW',
                                              'LUA_OPDIV', 'LUA_OPIDI', 'LUA_OPBAN', 'LUA_OPBOR', 'LUA_OPBXO',
-                                             'LUA_OPSHL', 'LUA_OPSHR', 'LUA_OPUNM', 'LUA_OPBNO'])]
+                                             'LUA_OPSHL', 'LUA_OPSHR', 'LUA_OPUNM', 'LUA_OPBNOT'])]
 ARIOPENUM = Enum('ARIOP', arithoplist)
 
 compareoplist = [(j, i) for i, j in enumerate(['LUA_OPEQ', 'LUA_OPLT', 'LUA_OPLE'])]
@@ -44,10 +44,8 @@ class LuaValue:
             return LUATYPE.LUA_TNIL.value
         elif typeInPy is bool:
             return LUATYPE.LUA_TBOOLEAN.value
-        elif typeInPy is int:
+        elif typeInPy is int or typeInPy is float:
             return LUATYPE.LUA_TNUMBER.value
-        elif typeInPy is float:
-            return LUATYPE.LUA_TNUBER.value
         elif typeInPy is str:
             return LUATYPE.LUA_TSTRING.value
         else:
@@ -57,10 +55,8 @@ class LuaValue:
         typeOfValue = type(self.value)
         if typeOfValue is float:
             return self.value, True
-        elif typeOfValue is int:
+        elif typeOfValue is int or typeOfValue is str:
             return float(self.value), True
-        elif typeOfValue is str:
-            return float(str), True
         else:
             return 0, False
 
@@ -79,25 +75,84 @@ class LuaValue:
             return 0, False
 
     @staticmethod
-    def arith(a,b,op):
+    def arith(a, b, op):
         if op[1] is None:
-            x, aok = a.convertToInteger()
-            if aok:
+            if a is not None:
+                x, aok = a.convertToInteger()
+                if aok:
+                    y, bok = b.convertToInteger()
+                    if bok:
+                        return LuaValue(LUATYPE.LUA_TNUMBER.value,op[0](x, y))
+            else:
                 y, bok = b.convertToInteger()
                 if bok:
-                    return op[0](x,y)
+                    return LuaValue(LUATYPE.LUA_TNUMBER.value,op[0](y))
         else:
             if op[0] is not None:
-                return op[0](int(a),int(b))
+                try:
+                    return LuaValue(LUATYPE.LUA_TNUMBER.value,op[0](int(a.value), int(b.value)))
+                except ValueError:
+                    pass
             x, aok = a.convertToFloat()
             if aok:
-                y,bok = b.convertToFloat()
+                y, bok = b.convertToFloat()
                 if bok:
-                    return op[1](x,y)
-        return None
+                    return LuaValue(LUATYPE.LUA_TNUMBER.value,op[1](x, y))
+        return LuaValue(LUATYPE.LUA_TNIL.value,None)
 
+    @staticmethod
+    def eq(a, b) -> bool:
+        if a.type != b.type:
+            return False
+        avalue = a.value
+        atype = type(avalue)
+        bvalue = b.value
+        btype = type(bvalue)
+        if avalue is None:
+            return bvalue is None
+        elif atype is bool:
+            return bool(bvalue) == avalue
+        elif atype is str:
+            return str(bvalue) == avalue
+        elif atype is int or atype is float:
+            if btype is int or btype is float:
+                return avalue == bvalue
+            else:
+                return False
+        else:
+            return a == b
 
+    @staticmethod
+    def it(a, b):
+        avalue = a.value
+        atype = type(avalue)
+        bvalue = b.value
+        btype = type(bvalue)
+        if avalue is str:
+            return avalue < str(bvalue)
+        elif atype is int or atype is float:
+            if btype is int or btype is float:
+                return avalue < bvalue
+            else:
+                raise TypeError('error comparison parameter')
+        else:
+            raise TypeError('error comparison')
 
+    @staticmethod
+    def ie(a, b):
+        avalue = a.value
+        atype = type(avalue)
+        bvalue = b.value
+        btype = type(bvalue)
+        if avalue is str:
+            return avalue > str(bvalue)
+        elif atype is int or atype is float:
+            if btype is int or btype is float:
+                return avalue > bvalue
+            else:
+                raise TypeError('error comparison parameter')
+        else:
+            raise TypeError('error comparison')
 
     def __str__(self):
         return self.value
@@ -119,15 +174,18 @@ class LuaStack:
 
     def push(self, luaValue):
         if self.top == len(self.slots):
+            # self.check(n)
             raise RuntimeError('stack overflow')
         self.slots[self.top] = luaValue
         self.top += 1
 
-    def pop(self):
+    def pop(self) -> LuaValue:
         if self.top < 1:
             raise RuntimeError('stack underflow')
         self.top -= 1
-        item = self.slots.pop(self.top)
+        # replace pop slots with set the slot to lua nil
+        item = self.slots[self.top]
+        self.slots[self.top] = LuaValue(LUATYPE.LUA_TNIL.value, None)
         return item
 
     def absIndex(self, index):
@@ -318,8 +376,41 @@ class LuaState:
         if op != ARIOPENUM.LUA_OPUNM.value and op != ARIOPENUM.LUA_OPBNOT.value:
             a = self.stack.pop()
         operator = arithOperators[op]
-        result = LuaValue.arith(a,b,operator)
+        result = LuaValue.arith(a, b, operator)
         if result is not None:
             self.stack.push(result)
         else:
             raise ArithmeticError('arithmetic error')
+
+    def Compare(self, idx1, idx2, compareOp):
+        a = self.stack.get(idx1)
+        b = self.stack.get(idx2)
+        if compareOp == COMOPENUM.LUA_OPEQ.value:
+            return LuaValue.eq(a, b)
+        elif compareOp == COMOPENUM.LUA_OPLT.value:
+            return LuaValue.lt(a, b)
+        elif compareOp == COMOPENUM.LUA_OPLE.value:
+            return LuaValue.le(a, b)
+        else:
+            raise RuntimeError('invalid compare operation')
+
+    def Len(self,index):
+        item = self.stack.get(index)
+        if item.type is LUATYPE.LUA_TSTRING.value:
+            self.stack.push(LuaValue(LUATYPE.LUA_TNUMBER.value,len(item.value)))
+        else:
+            raise TypeError('# operator get error parameter')
+
+    def Concat(self,num):
+        if num == 0:
+            self.stack.push('')
+        elif num >= 2:
+            for i in range(1,num):
+                if self.IsString(-1) and self.IsString(-2):
+                    s2 = self.ToString(-1)
+                    s1 = self.ToString(-2)
+                    self.stack.pop()
+                    self.stack.pop()
+                    self.stack.push(LuaValue(LUATYPE.LUA_TSTRING.value,s1 + s2))
+                else:
+                    raise TypeError('... operation error')
