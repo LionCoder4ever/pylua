@@ -108,9 +108,19 @@ class TestLuaStateStackApi(unittest.TestCase):
         self.assertEqual(self.getStackInfo()[-1], 12)
         self.removeAllItems()
 
-    def test_arith_band(self):
+    def test_arith_eq(self):
         self.addBaseItems()
         self.assertEqual(self.ls.Compare(3, 4, COMOPENUM.LUA_OPEQ.value), False)
+        self.removeAllItems()
+
+    def test_arith_lt(self):
+        self.addBaseItems()
+        self.assertEqual(self.ls.Compare(3, 4, COMOPENUM.LUA_OPLT.value), True)
+        self.removeAllItems()
+
+    def test_arith_le(self):
+        self.addBaseItems()
+        self.assertEqual(self.ls.Compare(3, 4, COMOPENUM.LUA_OPLE.value), False)
         self.removeAllItems()
 
     def test_concatNumber(self):

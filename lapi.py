@@ -82,23 +82,23 @@ class LuaValue:
                 if aok:
                     y, bok = b.convertToInteger()
                     if bok:
-                        return LuaValue(LUATYPE.LUA_TNUMBER.value,op[0](x, y))
+                        return LuaValue(LUATYPE.LUA_TNUMBER.value, op[0](x, y))
             else:
                 y, bok = b.convertToInteger()
                 if bok:
-                    return LuaValue(LUATYPE.LUA_TNUMBER.value,op[0](y))
+                    return LuaValue(LUATYPE.LUA_TNUMBER.value, op[0](y))
         else:
             if op[0] is not None:
                 try:
-                    return LuaValue(LUATYPE.LUA_TNUMBER.value,op[0](int(a.value), int(b.value)))
+                    return LuaValue(LUATYPE.LUA_TNUMBER.value, op[0](int(a.value), int(b.value)))
                 except ValueError:
                     pass
             x, aok = a.convertToFloat()
             if aok:
                 y, bok = b.convertToFloat()
                 if bok:
-                    return LuaValue(LUATYPE.LUA_TNUMBER.value,op[1](x, y))
-        return LuaValue(LUATYPE.LUA_TNIL.value,None)
+                    return LuaValue(LUATYPE.LUA_TNUMBER.value, op[1](x, y))
+        return LuaValue(LUATYPE.LUA_TNIL.value, None)
 
     @staticmethod
     def eq(a, b) -> bool:
@@ -123,12 +123,12 @@ class LuaValue:
             return a == b
 
     @staticmethod
-    def it(a, b):
+    def lt(a, b):
         avalue = a.value
         atype = type(avalue)
         bvalue = b.value
         btype = type(bvalue)
-        if avalue is str:
+        if atype is str:
             return avalue < str(bvalue)
         elif atype is int or atype is float:
             if btype is int or btype is float:
@@ -139,12 +139,12 @@ class LuaValue:
             raise TypeError('error comparison')
 
     @staticmethod
-    def ie(a, b):
+    def le(a, b):
         avalue = a.value
         atype = type(avalue)
         bvalue = b.value
         btype = type(bvalue)
-        if avalue is str:
+        if atype is str:
             return avalue > str(bvalue)
         elif atype is int or atype is float:
             if btype is int or btype is float:
@@ -222,8 +222,10 @@ def newLuaStack(size):
 
 
 class LuaState:
-    def __init__(self):
+    def __init__(self, proto=None):
         self.stack = newLuaStack(20)
+        self.proto = proto
+        self.pc = 0
 
     def GetTop(self):
         return self.stack.top
@@ -394,23 +396,23 @@ class LuaState:
         else:
             raise RuntimeError('invalid compare operation')
 
-    def Len(self,index):
+    def Len(self, index):
         item = self.stack.get(index)
         if item.type is LUATYPE.LUA_TSTRING.value:
-            self.stack.push(LuaValue(LUATYPE.LUA_TNUMBER.value,len(item.value)))
+            self.stack.push(LuaValue(LUATYPE.LUA_TNUMBER.value, len(item.value)))
         else:
             raise TypeError('# operator get error parameter')
 
-    def Concat(self,num):
+    def Concat(self, num):
         if num == 0:
             self.stack.push('')
         elif num >= 2:
-            for i in range(1,num):
+            for i in range(1, num):
                 if self.IsString(-1) and self.IsString(-2):
                     s2 = self.ToString(-1)
                     s1 = self.ToString(-2)
                     self.stack.pop()
                     self.stack.pop()
-                    self.stack.push(LuaValue(LUATYPE.LUA_TSTRING.value,s1 + s2))
+                    self.stack.push(LuaValue(LUATYPE.LUA_TSTRING.value, s1 + s2))
                 else:
                     raise TypeError('... operation error')
