@@ -140,15 +140,22 @@ class LuaValue:
 
     @staticmethod
     def le(a, b):
+        """
+        le: less than or equal to
+        -.-!
+        :param a: LuaValue
+        :param b: LuaValue
+        :return:
+        """
         avalue = a.value
         atype = type(avalue)
         bvalue = b.value
         btype = type(bvalue)
         if atype is str:
-            return avalue > str(bvalue)
+            return avalue <= str(bvalue)
         elif atype is int or atype is float:
             if btype is int or btype is float:
-                return avalue > bvalue
+                return avalue <= bvalue
             else:
                 raise TypeError('error comparison parameter')
         else:

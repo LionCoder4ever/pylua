@@ -120,7 +120,7 @@ class TestLuaStateStackApi(unittest.TestCase):
 
     def test_arith_le(self):
         self.addBaseItems()
-        self.assertEqual(self.ls.Compare(3, 4, COMOPENUM.LUA_OPLE.value), False)
+        self.assertEqual(self.ls.Compare(3, 4, COMOPENUM.LUA_OPLE.value), True)
         self.removeAllItems()
 
     def test_concatNumber(self):
