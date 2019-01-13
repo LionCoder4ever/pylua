@@ -19,7 +19,7 @@ iadd = fadd = lambda a, b: a + b
 isub = fsub = lambda a, b: a - b
 imul = fmul = lambda a, b: a * b
 imod = fmod = lambda a, b: a % b
-pow = pow
+lpow = pow
 div = lambda a, b: a / b
 iidiv = fidiv = lambda a, b: a // b
 band = lambda a, b: a & b
@@ -30,7 +30,7 @@ shr = ShiftRight
 iunm = funm = lambda a: -a
 bnot = lambda a: ~a
 
-arithOperators = [(iadd, fadd), (isub, fsub), (imul, fmul), (imod, fmod), (None, pow), (None, div), (iidiv, fidiv),
+arithOperators = [(iadd, fadd), (isub, fsub), (imul, fmul), (imod, fmod), (None, lpow), (None, div), (iidiv, fidiv),
                   (band, None), (bor, None), (bxor, None), (shl, None), (shr, None), (iunm, funm), (bnot, None)]
 
 
