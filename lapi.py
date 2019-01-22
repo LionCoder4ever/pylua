@@ -1,3 +1,4 @@
+import collections
 from enum import Enum
 from lmath import FloatToInteger, ShiftLeft, ShiftRight
 from math import pow
@@ -423,3 +424,30 @@ class LuaState:
                     self.stack.push(LuaValue(LUATYPE.LUA_TSTRING.value, s1 + s2))
                 else:
                     raise TypeError('... operation error')
+
+
+class LuaDict(collections.Mapping):
+    def __init__(self):
+        self.map = {}
+
+    def __setitem__(self, key, value):
+        if type(key) is not LuaValue:
+            raise TypeError('key must be instance of LuaValue')
+        if type(value) is not LuaValue:
+            raise TypeError('value must be instance of  LuaValue')
+        self.map[key] = value
+
+    def __getitem__(self, item):
+        return self.map.get(item)
+
+    def __iter__(self):
+        return iter(self.map)
+
+    def __len__(self):
+        return len(self.map)
+
+
+class LuaTable:
+    def __init__(self):
+        self.arr = []
+        self.map = LuaDict()
