@@ -447,7 +447,34 @@ class LuaDict(collections.Mapping):
         return len(self.map)
 
 
-class LuaTable:
+class LuaArray(collections.MutableSequence):
     def __init__(self):
         self.arr = []
+
+    def __delitem__(self, key):
+        del self.arr[key]
+
+    def __getitem__(self, item):
+        return self.arr[item]
+
+    def __len__(self):
+        return len(self.arr)
+
+    def __setitem__(self, key, value):
+        LuaArray.assertValue(value)
+        self.arr[key] = value
+
+    def insert(self, index, value):
+        LuaArray.assertValue(value)
+        self.arr.insert(index, value)
+
+    @staticmethod
+    def assertValue(value):
+        if type(value) is not LuaValue:
+            raise TypeError('value must be instance of  LuaValue')
+
+
+class LuaTable:
+    def __init__(self):
+        self.arr = LuaArray()
         self.map = LuaDict()
