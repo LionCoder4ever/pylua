@@ -40,17 +40,7 @@ class LuaValue:
         self.type, self.value = args
 
     def typeOf(self):
-        typeInPy = type(self.value)
-        if typeInPy is type(None):
-            return LUATYPE.LUA_TNIL.value
-        elif typeInPy is bool:
-            return LUATYPE.LUA_TBOOLEAN.value
-        elif typeInPy is int or typeInPy is float:
-            return LUATYPE.LUA_TNUMBER.value
-        elif typeInPy is str:
-            return LUATYPE.LUA_TSTRING.value
-        else:
-            raise TypeError('UNKONW type')
+        return self.type
 
     def convertToFloat(self):
         typeOfValue = type(self.value)
@@ -475,6 +465,80 @@ class LuaArray(collections.MutableSequence):
 
 
 class LuaTable:
-    def __init__(self):
-        self.arr = LuaArray()
-        self.map = LuaDict()
+    def __init__(self, narr, nrec):
+        if narr > 0:
+            self.arr = LuaArray()
+        if nrec > 0:
+            self.map = LuaDict()
+
+    def get(self, key):
+        """
+        if key is int or can be convert to int,get value from array
+        :param key:
+        :return:
+        """
+        key = self.floatToInteger(key)
+        if type(key.value) is int and (1 <= key.value <= len(self.arr)):
+            return self.arr[key.value - 1]
+        return self.map.get(key)
+
+    def put(self, key, value):
+        key = self.floatToInteger(key)
+        if type(key.value) is int and key.value >= 1:
+            if key.value <= len(self.arr):
+                self.arr[key.value - 1] = value
+                if key.value == len(self.arr) and value.value is None:
+                    self.shrinkArray()
+            if key.value == len(self.arr) + 1:
+                if self.map is not None:
+                    del self.map[key]
+                if value.value is not None:
+                    self.arr.append(value)
+                    self.expandArray()
+        if value.value is not None:
+            if self.map is None:
+                self.map = LuaDict()
+            self.map[key] = value
+        else:
+            del self.map[key]
+
+
+    def floatToInteger(self, key):
+        """
+        if key is float,try convert to int
+        :param key:
+        :return:
+        """
+        if key.typeof() is LUATYPE.LUA_TNUMBER.value:
+            if type(key.value) is float:
+                keytoint, convert = FloatToInteger(key.value)
+                if convert:
+                    key.value = keytoint
+                    return key
+        return key
+
+    def shrinkArray(self):
+        for i in range(1,len(self.arr) + 1):
+            if self.arr[-i].value is None:
+                self.arr.pop()
+            else:
+                break
+
+    def expandArray(self):
+        """
+        move item in map to arr
+        :return:
+        """
+        idx = len(self.arr + 1)
+        for i in self.map.keys():
+            if int(i.value) is idx:
+                self.arr.append(self.map[i])
+                del self.map[i]
+                idx += 1
+            else:
+                break
+
+    def len(self):
+        return len(self.arr)
+
+

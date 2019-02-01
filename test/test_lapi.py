@@ -1,5 +1,5 @@
 import unittest
-from lapi import LuaState, LUATYPE, ARIOPENUM, COMOPENUM
+from lapi import LuaState, LUATYPE, ARIOPENUM, COMOPENUM, LuaArray, LuaDict
 
 
 class TestLuaStateStackApi(unittest.TestCase):
@@ -144,6 +144,16 @@ class TestLuaStateStackApi(unittest.TestCase):
         self.ls.Len(2)
         self.assertEqual(self.getStackInfo()[-1], 5)
         self.removeAllItems()
+
+    def test_luaArray(self):
+        self.arr = LuaArray()
+        with self.assertRaises(TypeError):
+            self.arr.append(11)
+
+    def test_luaDict(self):
+        self.map = LuaDict()
+        with self.assertRaises(TypeError):
+            self.map['errorkey'] = 'errorvalue'
 
 
 if __name__ == '__main__':
