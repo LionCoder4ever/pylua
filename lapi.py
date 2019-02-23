@@ -73,22 +73,22 @@ class LuaValue:
                 if aok:
                     y, bok = b.convertToInteger()
                     if bok:
-                        return LuaValue(LUATYPE.LUA_TNUMBER.value, op[0](x, y))
+                        return LuaNumber(op[0](x, y))
             else:
                 y, bok = b.convertToInteger()
                 if bok:
-                    return LuaValue(LUATYPE.LUA_TNUMBER.value, op[0](y))
+                    return LuaNumber(op[0](y))
         else:
             if op[0] is not None:
                 try:
-                    return LuaValue(LUATYPE.LUA_TNUMBER.value, op[0](int(a.value), int(b.value)))
+                    return LuaNumber(op[0](int(a.value), int(b.value)))
                 except ValueError:
                     pass
             x, aok = a.convertToFloat()
             if aok:
                 y, bok = b.convertToFloat()
                 if bok:
-                    return LuaValue(LUATYPE.LUA_TNUMBER.value, op[1](x, y))
+                    return LuaNumber(op[1](x, y))
         return LuaValue(LUATYPE.LUA_TNIL.value, None)
 
     @staticmethod
@@ -156,9 +156,25 @@ class LuaValue:
         return self.value
 
 
+class LuaNumber(LuaValue):
+    def __init__(self, value: int or float):
+        super().__init__(LUATYPE.LUA_TNUMBER.value, value)
+
+    def __repr__(self):
+        return self.value
+
+
+class LuaString(LuaValue):
+    def __init__(self, value: str):
+        super().__init__(LUATYPE.LUA_TSTRING.value, value)
+
+    def __repr__(self):
+        return self.value
+
+
 class LuaStack:
     def __init__(self, size):
-        self.slots = []
+        self.slots = LuaArray()
         self.size = size
         self.top = 0
         for i in range(size):
@@ -217,6 +233,137 @@ class LuaStack:
 
 def newLuaStack(size):
     return LuaStack(size)
+
+
+class LuaDict(collections.Mapping):
+    def __init__(self):
+        self.map = {}
+
+    def __setitem__(self, key, value):
+        if not isinstance(key, LuaValue):
+            raise TypeError('key must be instance of LuaValue')
+        if not isinstance(value, LuaValue):
+            raise TypeError('value must be instance of  LuaValue')
+        self.map[key] = value
+
+    def __getitem__(self, item):
+        return self.map.get(item)
+
+    def __iter__(self):
+        return iter(self.map)
+
+    def __len__(self):
+        return len(self.map)
+
+
+class LuaArray(collections.MutableSequence):
+    def __init__(self):
+        self.arr = []
+
+    def __delitem__(self, key):
+        del self.arr[key]
+
+    def __getitem__(self, item):
+        return self.arr[item]
+
+    def __len__(self):
+        return len(self.arr)
+
+    def __setitem__(self, key, value):
+        LuaArray.assertValue(value)
+        self.arr[key] = value
+
+    def insert(self, index, value):
+        LuaArray.assertValue(value)
+        self.arr.insert(index, value)
+
+    @staticmethod
+    def assertValue(value):
+        if not isinstance(value, LuaValue):
+            raise TypeError('value must be instance of  LuaValue')
+
+
+class LuaTable(LuaValue):
+    LFIELDS_PER_FLUSH = 50
+
+    def __init__(self, narr: int, nrec: int):
+        super().__init__(LUATYPE.LUA_TTABLE.value, self)
+        if narr > 0:
+            self.arr = LuaArray()
+        if nrec > 0:
+            self.map = LuaDict()
+
+    def get(self, key: LuaValue) -> LuaValue:
+        """
+        if key is int or can be convert to int,get value from array
+        :param key:
+        :return:
+        """
+        key = self.floatToInteger(key)
+        if type(key.value) is int and (1 <= key.value <= len(self.arr)):
+            return self.arr[key.value - 1]
+        return self.map.get(key)
+
+    def put(self, key, value):
+        key = self.floatToInteger(key)
+        if type(key.value) is int and key.value >= 1:
+            if key.value <= len(self.arr):
+                self.arr[key.value - 1] = value
+                if key.value == len(self.arr) and value.value is None:
+                    self.shrinkArray()
+                return
+            if key.value == len(self.arr) + 1:
+                if hasattr(self, 'map'):
+                    del self.map[key]
+                if value.value is not None:
+                    self.arr.append(value)
+                    self.expandArray()
+                return
+        if value.value is not None:
+            if not hasattr(self, 'map'):
+                self.map = LuaDict()
+            self.map[key] = value
+        else:
+            del self.map[key]
+
+    def floatToInteger(self, key):
+        """
+        if key is float,try convert to int
+        :param key:
+        :return:
+        """
+        if key.typeOf() is LUATYPE.LUA_TNUMBER.value:
+            if type(key.value) is float:
+                keytoint, convert = FloatToInteger(key.value)
+                if convert:
+                    key.value = keytoint
+                    return key
+        return key
+
+    def shrinkArray(self):
+        for i in range(1, len(self.arr) + 1):
+            if self.arr[-i].value is None:
+                self.arr.pop()
+            else:
+                break
+
+    def expandArray(self):
+        """
+        move item in map to arr
+        :return:
+        """
+        idx = len(self.arr) + 1
+        if hasattr(self, 'map'):
+            for i in self.map.keys():
+                if int(i.value) is idx:
+                    self.arr.append(self.map[i])
+                    del self.map[i]
+                    idx += 1
+                else:
+                    break
+
+    def len(self) -> int:
+        return len(self.arr)
 
 
 class LuaState:
@@ -284,13 +431,13 @@ class LuaState:
         self.stack.push(LuaValue(LUATYPE.LUA_TBOOLEAN.value, bool))
 
     def PushInteger(self, number):
-        self.stack.push(LuaValue(LUATYPE.LUA_TNUMBER.value, number))
+        self.stack.push(LuaNumber(number))
 
     def PushNumber(self, number):
-        self.stack.push(LuaValue(LUATYPE.LUA_TNUMBER.value, number))
+        self.stack.push(LuaNumber(number))
 
     def PushString(self, str):
-        self.stack.push(LuaValue(LUATYPE.LUA_TSTRING.value, str))
+        self.stack.push(LuaString(str))
 
     def TypeName(self, tp):
         if tp is LUATYPE.LUA_TNONE.value:
@@ -359,9 +506,9 @@ class LuaState:
         value = self.stack.get(index).value
         valueType = type(value)
         if valueType is str:
-            return value, True
+            return LuaString(value), True
         elif valueType is int or valueType is float:
-            toStrValue = str(value)
+            toStrValue = LuaString(str(value))
             self.stack.set(index, toStrValue)
             return toStrValue, True
         else:
@@ -397,7 +544,9 @@ class LuaState:
     def Len(self, index):
         item = self.stack.get(index)
         if item.type is LUATYPE.LUA_TSTRING.value:
-            self.stack.push(LuaValue(LUATYPE.LUA_TNUMBER.value, len(item.value)))
+            self.stack.push(LuaNumber(len(item.value)))
+        elif item.type is LUATYPE.LUA_TTABLE.value:
+            self.stack.push(LuaNumber(item.value.len()))
         else:
             raise TypeError('# operator get error parameter')
 
@@ -411,134 +560,45 @@ class LuaState:
                     s1 = self.ToString(-2)
                     self.stack.pop()
                     self.stack.pop()
-                    self.stack.push(LuaValue(LUATYPE.LUA_TSTRING.value, s1 + s2))
+                    self.stack.push(LuaString(s1.value + s2.value))
                 else:
                     raise TypeError('... operation error')
 
+    def CreateTable(self, narr: int, nrec: int):
+        self.stack.push(LuaTable(narr, nrec))
 
-class LuaDict(collections.Mapping):
-    def __init__(self):
-        self.map = {}
+    def NewTable(self):
+        self.CreateTable(0, 0)
 
-    def __setitem__(self, key, value):
-        if type(key) is not LuaValue:
-            raise TypeError('key must be instance of LuaValue')
-        if type(value) is not LuaValue:
-            raise TypeError('value must be instance of  LuaValue')
-        self.map[key] = value
+    def getTable(self, t: LuaTable, key: LuaValue) -> LuaValue:
+        if t.type is not LUATYPE.LUA_TTABLE.value:
+            raise TypeError('get value from a element not a table')
+        value = t.get(key)
+        self.stack.push(value)
+        return value.typeOf()
 
-    def __getitem__(self, item):
-        return self.map.get(item)
+    def GetTable(self, index: int) -> LuaValue:
+        return self.getTable(self.stack.get(index), self.stack.pop())
 
-    def __iter__(self):
-        return iter(self.map)
+    def GetField(self, index: int, key: LuaString):
+        return self.getTable(self.stack.get(index), key)
 
-    def __len__(self):
-        return len(self.map)
+    def GetI(self, index: int, key: LuaNumber):
+        return self.getTable(self.stack.get(index), key)
 
+    def SetTable(self, index: int):
+        t = self.stack.get(index)
+        value = self.stack.pop()
+        key = self.stack.pop()
+        self.setTable(t, key, value)
 
-class LuaArray(collections.MutableSequence):
-    def __init__(self):
-        self.arr = []
+    def setTable(self, t: LuaTable, key: LuaValue, value: LuaValue):
+        if t.type is not LUATYPE.LUA_TTABLE.value:
+            raise TypeError('set value to a element not a table')
+        t.put(key, value)
 
-    def __delitem__(self, key):
-        del self.arr[key]
+    def SetField(self, index: int, key: LuaString):
+        self.setTable(self.stack.get(index), key, self.stack.pop())
 
-    def __getitem__(self, item):
-        return self.arr[item]
-
-    def __len__(self):
-        return len(self.arr)
-
-    def __setitem__(self, key, value):
-        LuaArray.assertValue(value)
-        self.arr[key] = value
-
-    def insert(self, index, value):
-        LuaArray.assertValue(value)
-        self.arr.insert(index, value)
-
-    @staticmethod
-    def assertValue(value):
-        if type(value) is not LuaValue:
-            raise TypeError('value must be instance of  LuaValue')
-
-
-class LuaTable:
-    def __init__(self, narr, nrec):
-        if narr > 0:
-            self.arr = LuaArray()
-        if nrec > 0:
-            self.map = LuaDict()
-
-    def get(self, key):
-        """
-        if key is int or can be convert to int,get value from array
-        :param key:
-        :return:
-        """
-        key = self.floatToInteger(key)
-        if type(key.value) is int and (1 <= key.value <= len(self.arr)):
-            return self.arr[key.value - 1]
-        return self.map.get(key)
-
-    def put(self, key, value):
-        key = self.floatToInteger(key)
-        if type(key.value) is int and key.value >= 1:
-            if key.value <= len(self.arr):
-                self.arr[key.value - 1] = value
-                if key.value == len(self.arr) and value.value is None:
-                    self.shrinkArray()
-            if key.value == len(self.arr) + 1:
-                if self.map is not None:
-                    del self.map[key]
-                if value.value is not None:
-                    self.arr.append(value)
-                    self.expandArray()
-        if value.value is not None:
-            if self.map is None:
-                self.map = LuaDict()
-            self.map[key] = value
-        else:
-            del self.map[key]
-
-
-    def floatToInteger(self, key):
-        """
-        if key is float,try convert to int
-        :param key:
-        :return:
-        """
-        if key.typeof() is LUATYPE.LUA_TNUMBER.value:
-            if type(key.value) is float:
-                keytoint, convert = FloatToInteger(key.value)
-                if convert:
-                    key.value = keytoint
-                    return key
-        return key
-
-    def shrinkArray(self):
-        for i in range(1,len(self.arr) + 1):
-            if self.arr[-i].value is None:
-                self.arr.pop()
-            else:
-                break
-
-    def expandArray(self):
-        """
-        move item in map to arr
-        :return:
-        """
-        idx = len(self.arr + 1)
-        for i in self.map.keys():
-            if int(i.value) is idx:
-                self.arr.append(self.map[i])
-                del self.map[i]
-                idx += 1
-            else:
-                break
-
-    def len(self):
-        return len(self.arr)
-
-
+    def SetI(self, index: int, key: int):
+        self.setTable(self.stack.get(index), LuaNumber(key), self.stack.pop())

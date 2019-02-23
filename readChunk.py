@@ -1,8 +1,9 @@
 from sys import argv
 from struct import unpack
 from enum import Enum
-from lapi import LuaValue, ARIOPENUM, COMOPENUM, LuaState, LUATYPE
+from lapi import LuaValue, ARIOPENUM, COMOPENUM, LuaState, LUATYPE, LuaNumber, LuaString, LuaTable
 from lvm import LuaVM
+from lmath import FbToInt
 
 opcodelist = [(j, i) for i, j in enumerate(['OP_MOVE', 'OP_LOADK', 'OP_LOADKX', 'OP_LOADBOOL',
                                             'OP_LOADNIL', 'OP_GETUPVAL', 'OP_GETTABUP', 'OP_GETTABLE',
@@ -81,7 +82,7 @@ opcodes = [Opcode(0, 1, OPARGMODE.OpArgR.value, OPARGMODE.OpArgN.value, OPMODE.I
            Opcode(0, 1, OPARGMODE.OpArgR.value, OPARGMODE.OpArgN.value, OPMODE.IAsBx.value, "FORPREP"),
            Opcode(0, 0, OPARGMODE.OpArgN.value, OPARGMODE.OpArgU.value, OPMODE.IABC.value, "TFORCALL"),
            Opcode(0, 1, OPARGMODE.OpArgR.value, OPARGMODE.OpArgN.value, OPMODE.IAsBx.value, "TFORLOOP"),
-           Opcode(0, 0, OPARGMODE.OpArgU.value, OPARGMODE.OpArgU.value, OPMODE.IABC.value, "SETLIST "),
+           Opcode(0, 0, OPARGMODE.OpArgU.value, OPARGMODE.OpArgU.value, OPMODE.IABC.value, "SETLIST"),
            Opcode(0, 1, OPARGMODE.OpArgU.value, OPARGMODE.OpArgN.value, OPMODE.IABx.value, "CLOSURE "),
            Opcode(0, 1, OPARGMODE.OpArgU.value, OPARGMODE.OpArgN.value, OPMODE.IABC.value, "VARARG  "),
            Opcode(0, 0, OPARGMODE.OpArgU.value, OPARGMODE.OpArgU.value, OPMODE.IAx.value, "EXTRAARG")]
@@ -383,7 +384,44 @@ class Instruction:
             vm.AddPC(sBx)
             vm.ls.Copy(a, a + 3)
 
-    def execute(self, vm):
+    def newtable(self, vm: LuaVM):
+        a, b, c = self.getAbc()
+        a += 1
+        vm.ls.CreateTable(FbToInt(b), FbToInt(c))
+        vm.ls.Replace(a)
+
+    def gettable(self, vm: LuaVM):
+        a, b, c = self.getAbc()
+        a += 1
+        b += 1
+        vm.GetRk(c)
+        vm.ls.GetTable(b)
+        vm.ls.Replace(a)
+
+    def settable(self, vm: LuaVM):
+        a, b, c = self.getAbc()
+        a += 1
+        vm.GetRk(b)
+        vm.GetRk(c)
+        vm.ls.SetTable(a)
+
+    def setlist(self,vm: LuaVM):
+        a, b, c = self.getAbc()
+        a += 1
+        if c > 0:
+            c -= 1
+        else:
+            c = Instruction(vm.Fetch()).getAx()
+
+        index = c * LuaTable.LFIELDS_PER_FLUSH
+        step = 1
+        while step <= b:
+            index += 1
+            vm.ls.PushValue(a + step)
+            vm.ls.SetI(a,index)
+            step += 1
+
+    def execute(self, vm: LuaVM):
         action = getattr(self, str.lower(opcodes[self.getOpcode()].name))
         if action is not None:
             action(vm)
@@ -531,11 +569,11 @@ class HandleFile:
             elif type == LUA_BOOLEAN:
                 constants.append(LuaValue(LUATYPE.LUA_TBOOLEAN.value, self.readBoolean()))
             elif type == LUA_NUMBER:
-                constants.append(LuaValue(LUATYPE.LUA_TNUMBER.value, self.readNumber()))
+                constants.append(LuaNumber(self.readNumber()))
             elif type == LUA_INTEGER:
-                constants.append(LuaValue(LUATYPE.LUA_TNUMBER.value, self.readInt()))
+                constants.append(LuaNumber(self.readInt()))
             elif type == LUA_SHORT_STR or type == LUA_LONG_STR:
-                constants.append(LuaValue(LUATYPE.LUA_TSTRING.value, self.readString()))
+                constants.append(LuaString(self.readString()))
             else:
                 raise TypeError('type not support')
 

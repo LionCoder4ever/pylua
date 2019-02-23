@@ -1,5 +1,8 @@
+from lapi import LuaState
+
+
 class LuaVM:
-    def __init__(self, l):
+    def __init__(self, l: LuaState):
         self.ls = l
 
     def PC(self) -> int:
@@ -23,4 +26,3 @@ class LuaVM:
             self.GetConst(rk & 0xFF)
         else:
             self.ls.PushValue(rk + 1)
-
