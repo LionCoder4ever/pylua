@@ -2,6 +2,8 @@ import unittest
 from test.testHelper import TestHelper
 
 
+# TODO fix unittest failure
+
 class TestLuaVMApi(unittest.TestCase, TestHelper):
     @classmethod
     def setUpClass(cls):
