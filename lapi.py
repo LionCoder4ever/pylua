@@ -41,7 +41,7 @@ class LuaStack:
     def check(self, n):
         free = len(self.slots) - self.top
         # if free < n:
-        for i in range(free,n):
+        for i in range(free, n):
             self.slots.append(LuaNil())
 
     def push(self, luaValue):
@@ -74,7 +74,7 @@ class LuaStack:
 
     def popN(self, n: int) -> List[LuaValue]:
         tmplist = [LuaNil()] * n
-        for i in range(n-1,-1,-1):
+        for i in range(n - 1, -1, -1):
             tmplist[i] = self.pop()
         return tmplist
 
@@ -382,7 +382,7 @@ class LuaState(LuaVM):
         newStack.pushN(funcAndArgs[1:], nParams)
         newStack.top = nRegs
         if nArgs > nParams and closure.value.isVararg:
-            newStack.varargs= funcAndArgs[nParams+1:]
+            newStack.varargs = funcAndArgs[nParams + 1:]
         self.pushLuaStack(newStack)
         self.runLuaClosure()
         self.popLuaStack()
@@ -398,3 +398,5 @@ class LuaState(LuaVM):
             inst.execute(self)
             if inst.getOpcode() is OPCODE.OP_RETURN.value:
                 break
+
+    # TODO add function call
