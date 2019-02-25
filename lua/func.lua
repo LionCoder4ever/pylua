@@ -19,3 +19,5 @@ local v2, i2 = max(3, 9, 7, 128, 35)
 assert(v2 == 128 and i2 == 4)
 local v3, i3 = max(max(3, 9, 7, 128, 35))
 assert(v3 == 128 and i3 == 1)
+local t = {max(3, 9, 7, 128, 35)}
+assert(t[1] == 128 and t[2] == 4)
