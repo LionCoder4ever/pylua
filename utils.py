@@ -1,5 +1,4 @@
 import struct
-from struct import unpack
 from sys import argv
 
 LUA_LONG_STR_LENGTH = 254
@@ -60,12 +59,12 @@ class SizedRecord:
         if sz == LUA_NIL:
             return ''
         elif sz == LUA_LONG_STR_LENGTH:
-            sz = unpack('=d', f.read(8))[0]
+            sz = readValue('=d')
         buf = f.read(sz - includes_size * sz_nbytes)
         return cls(buf)
 
     @classmethod
-    def from_file(cls, f, size_fmt, includes_size=True):
+    def from_file(cls, f, size_fmt: str, includes_size=True):
         sz_nbytes = struct.calcsize(size_fmt)
         sz_bytes = f.read(sz_nbytes)
         sz, = struct.unpack(size_fmt, sz_bytes)
@@ -116,10 +115,13 @@ if __name__ == '__main__':
     elif len(argv) == 2:
         f = open(argv[1], 'rb')
         phead = LuaHeader.from_file(f)
-        numParms = readValue(f, '=B')
+        readValue(f,'=B')
         source_name_record = SizedRecord.readString(f, '=B')
         source_name = "".join([bytes.decode(i[0]) for i in source_name_record.iter_as('=c')])
         line_def, last_line_def = readValue(f, '=I', 2)
         numParms = readValue(f, '=B')
         isVararg = readValue(f, '=?')
         maxStackSize = readValue(f, '=B')
+        code = readValue(f,'=I')
+        code_num_record = SizedRecord.from_file(f, '=I')
+        code = [i[0] for i in code_num_record.iter_as('=I')]
