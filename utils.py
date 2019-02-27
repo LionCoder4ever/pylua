@@ -48,39 +48,42 @@ class Structure(metaclass=StructureMeta):
 
 
 class SizedRecord:
-    def __init__(self, bytedata):
+    def __init__(self, bytedata, item_fmt):
         self._buffer = memoryview(bytedata)
+        self._item_fmt = item_fmt
 
     @classmethod
-    def readString(cls, f, size_fmt, includes_size=True):
+    def readString(cls, f, size_fmt, item_fmt: str, includes_size=True):
         sz_nbytes = struct.calcsize(size_fmt)
+        sz_item_fmt = struct.calcsize(item_fmt)
         sz_bytes = f.read(sz_nbytes)
         sz, = struct.unpack(size_fmt, sz_bytes)
         if sz == LUA_NIL:
             return ''
         elif sz == LUA_LONG_STR_LENGTH:
             sz = readValue('=d')
-        buf = f.read(sz - includes_size * sz_nbytes)
-        return cls(buf)
+        buf = f.read(sz * sz_item_fmt - includes_size * sz_nbytes)
+        return cls(buf, item_fmt)
 
     @classmethod
-    def from_file(cls, f, size_fmt: str, includes_size=True):
+    def from_file(cls, f, size_fmt: str, item_fmt: str, includes_size=True):
         sz_nbytes = struct.calcsize(size_fmt)
+        sz_item_fmt = struct.calcsize(item_fmt)
         sz_bytes = f.read(sz_nbytes)
         sz, = struct.unpack(size_fmt, sz_bytes)
-        buf = f.read(sz - includes_size * sz_nbytes)
-        return cls(buf)
+        buf = f.read(sz * sz_item_fmt - includes_size * sz_nbytes)
+        return cls(buf, item_fmt)
 
-    def iter_as(self, code):
-        if isinstance(code, str):
-            s = struct.Struct(code)
+    def iter(self):
+        if isinstance(self._item_fmt, str):
+            s = struct.Struct(self._item_fmt)
             for off in range(0, len(self._buffer), s.size):
                 yield s.unpack_from(self._buffer, off)
-        elif isinstance(code, StructureMeta):
-            size = code.struct_size
+        elif isinstance(self._item_fmt, StructureMeta):
+            size = self._item_fmt.struct_size
             for off in range(0, len(self._buffer), size):
                 data = self._buffer[off:off + size]
-                yield code(data)
+                yield self._item_fmt(data)
 
 
 class LuaHeader(Structure):
@@ -115,13 +118,12 @@ if __name__ == '__main__':
     elif len(argv) == 2:
         f = open(argv[1], 'rb')
         phead = LuaHeader.from_file(f)
-        readValue(f,'=B')
-        source_name_record = SizedRecord.readString(f, '=B')
-        source_name = "".join([bytes.decode(i[0]) for i in source_name_record.iter_as('=c')])
+        readValue(f, '=B')
+        source_name_record = SizedRecord.readString(f, '=B', '=c')
+        source_name = "".join([bytes.decode(i[0]) for i in source_name_record.iter()])
         line_def, last_line_def = readValue(f, '=I', 2)
         numParms = readValue(f, '=B')
         isVararg = readValue(f, '=?')
         maxStackSize = readValue(f, '=B')
-        code = readValue(f,'=I')
-        code_num_record = SizedRecord.from_file(f, '=I')
-        code = [i[0] for i in code_num_record.iter_as('=I')]
+        code_num_record = SizedRecord.from_file(f, '=I', '=I', includes_size=False)
+        code = [i[0] for i in code_num_record.iter()]
