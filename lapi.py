@@ -27,7 +27,7 @@ arithOperators = [(iadd, fadd), (isub, fsub), (imul, fmul), (imod, fmod), (None,
 
 
 class LuaStack:
-    def __init__(self, size):
+    def __init__(self, size: int, ls):
         self.slots = LuaArray()
         self.size = size
         self.top = 0
@@ -37,6 +37,7 @@ class LuaStack:
         self.closure = None
         self.varargs = None
         self.pc = 0
+        self.ls = ls
 
     def check(self, n):
         free = len(self.slots) - self.top
@@ -107,13 +108,21 @@ class LuaStack:
             toindex -= 1
 
 
-def newLuaStack(size):
-    return LuaStack(size)
+def newLuaStack(size,ls):
+    return LuaStack(size,ls)
 
 
 class LuaState(LuaVM):
+    LUA_MINSTACK = 20
+    LUA_MAXSTACK = 1000000
+    LUA_REGISTRYINDEX = -LUA_MAXSTACK - 1000
+    LUA_RIDX_GLOBALS = 2
+
     def __init__(self):
-        self.stack = newLuaStack(20)
+        self.stack = newLuaStack(self.LUA_MINSTACK,self)
+        self.registry = LuaTable(0, 0)
+        self.registry.put(LuaNumber(self.LUA_RIDX_GLOBALS), LuaTable(0, 0))
+        self.pushLuaStack(newLuaStack(self.LUA_MINSTACK,self))
 
     def GetTop(self):
         return self.stack.top
@@ -368,8 +377,11 @@ class LuaState(LuaVM):
     def Call(self, nArgs: int, nResults: int):
         closure = self.stack.get(-(nArgs + 1))
         if isinstance(closure, LuaClosure):
-            print("call {}<{},{}>".format(closure.value.source, closure.value.lineDef, closure.value.lastLineDef))
-            self.callLuaClosure(nArgs, nResults, closure)
+            if closure.value is not None:
+                print("call {}<{},{}>".format(closure.value.source, closure.value.lineDef, closure.value.lastLineDef))
+                self.callLuaClosure(nArgs, nResults, closure)
+            else:
+                self.callPyClosure(nArgs, nResults, closure)
         else:
             raise TypeError('call element is not function')
 
@@ -387,10 +399,34 @@ class LuaState(LuaVM):
         self.runLuaClosure()
         self.popLuaStack()
 
+    def callPyClosure(self, nArgs: int, nResults: int, closure: LuaClosure):
+        newStack = LuaStack(nArgs + 20)
+        newStack.closure = closure
+        args = self.stack.popN(nArgs)
+        newStack.pushN(args, nArgs)
+        self.stack.pop()
+        self.pushLuaStack(newStack)
+        result = closure.pyFunc()
+        self.popLuaStack()
         if nResults is not 0:
-            results = newStack.popN(newStack.top - nRegs)
+            results = newStack.popN(result)
             self.stack.check(len(results))
             self.stack.pushN(results, nResults)
+
+    def PushPyFunction(self, func):
+        self.stack.push(LuaClosure(None, func))
+
+    def IsPyFunction(self, index: int):
+        value = self.stack.get(index)
+        if isinstance(value, LuaClosure):
+            return value.pyFunc is not None
+        return False
+
+    def ToPyFunction(self, index: int):
+        value = self.stack.get(index)
+        if isinstance(value, LuaClosure):
+            return value.pyFunc
+        return None
 
     def runLuaClosure(self):
         while True:
@@ -398,5 +434,3 @@ class LuaState(LuaVM):
             inst.execute(self)
             if inst.getOpcode() is OPCODE.OP_RETURN.value:
                 break
-
-    # TODO add function call
