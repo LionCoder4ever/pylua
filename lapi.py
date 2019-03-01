@@ -80,13 +80,19 @@ class LuaStack:
         return tmplist
 
     def absIndex(self, index):
+        if index <= LuaState.LUA_REGISTRYINDEX:
+            return index
         return index if index >= 0 else index + self.top + 1
 
     def isValid(self, index):
+        if index is LuaState.LUA_REGISTRYINDEX:
+            return True
         absIndex = self.absIndex(index)
         return absIndex and 0 < absIndex <= self.top
 
     def get(self, index):
+        if index is LuaState.LUA_REGISTRYINDEX:
+            return self.ls.registry
         absIndex = self.absIndex(index)
         if 0 < absIndex <= self.top:
             item = self.slots[absIndex - 1]
@@ -94,6 +100,9 @@ class LuaStack:
         return None
 
     def set(self, index, luavalue):
+        if index is LuaState.LUA_REGISTRYINDEX:
+            self.ls.registry = luavalue
+            return
         absIndex = self.absIndex(index)
         if 0 < absIndex <= self.top:
             self.slots[absIndex - 1] = luavalue
