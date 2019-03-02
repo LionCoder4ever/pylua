@@ -37,7 +37,7 @@ class TestLuaStateStackApi(unittest.TestCase, TestHelper):
 
     def test_pushString(self):
         self.lvm.PushString('hello')
-        self.assertEqual(self.getStackInfo()[-1].value, 'hello')
+        self.assertEqual(self.getStackInfo()[-1], 'hello')
 
     def test_pushValue(self):
         prevalue = self.getStackInfo()[-4]
@@ -115,14 +115,14 @@ class TestLuaStateStackApi(unittest.TestCase, TestHelper):
         self.lvm.PushInteger(2)
         self.lvm.PushInteger(3)
         self.lvm.Concat(2)
-        self.assertEqual(self.getStackInfo()[-1].value, '23')
+        self.assertEqual(self.getStackInfo()[-1], '23')
         self.removeAllItems()
 
     def test_concatString(self):
         self.lvm.PushString('hello ')
         self.lvm.PushString('world')
         self.lvm.Concat(2)
-        self.assertEqual(self.getStackInfo()[-1].value, 'hello world')
+        self.assertEqual(self.getStackInfo()[-1], 'hello world')
         self.removeAllItems()
 
     def test_len(self):

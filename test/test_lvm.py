@@ -10,7 +10,7 @@ class TestLuaVMApi(unittest.TestCase, TestHelper):
         cls.setUpFuncForVm('loop.out')
 
     def test_loopresult(self):
-        self.assertEqual(self.getValueInStack(0), 2550)
+        self.assertEqual(self.getValueInStack(-1), 2550)
 
 
 class TestLuaVMTableApi(unittest.TestCase, TestHelper):
@@ -19,7 +19,7 @@ class TestLuaVMTableApi(unittest.TestCase, TestHelper):
         cls.setUpFuncForVm('table.out')
 
     def test_tableresult(self):
-        self.assertEqual(self.getValueInStack(1), 'cBaBar3')
+        self.assertEqual(self.getValueInStack(-1), 'cBaBar3')
 
 
 if __name__ == '__main__':
