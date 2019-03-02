@@ -117,8 +117,8 @@ class LuaStack:
             toindex -= 1
 
 
-def newLuaStack(size,ls):
-    return LuaStack(size,ls)
+def newLuaStack(size, ls):
+    return LuaStack(size, ls)
 
 
 class LuaState(LuaVM):
@@ -126,12 +126,13 @@ class LuaState(LuaVM):
     LUA_MAXSTACK = 1000000
     LUA_REGISTRYINDEX = -LUA_MAXSTACK - 1000
     LUA_RIDX_GLOBALS = 2
+    T_LUA_RIDX_GLOBALS = LuaNumber(LUA_RIDX_GLOBALS)
 
     def __init__(self):
-        self.stack = newLuaStack(self.LUA_MINSTACK,self)
+        self.stack = newLuaStack(self.LUA_MINSTACK, self)
         self.registry = LuaTable(0, 0)
-        self.registry.put(LuaNumber(self.LUA_RIDX_GLOBALS), LuaTable(0, 0))
-        self.pushLuaStack(newLuaStack(self.LUA_MINSTACK,self))
+        self.registry.put(self.T_LUA_RIDX_GLOBALS, LuaTable(0, 0))
+        self.pushLuaStack(newLuaStack(self.LUA_MINSTACK, self))
 
     def GetTop(self):
         return self.stack.top
@@ -278,6 +279,9 @@ class LuaState(LuaVM):
     def ToString(self, index):
         return self.ToStringX(index)[0]
 
+    def ToPyString(self, index):
+        return self.ToStringX(index)[0].value if self.ToStringX(index)[1] else ''
+
     def Arith(self, op):
         a = None
         b = self.stack.pop()
@@ -386,7 +390,7 @@ class LuaState(LuaVM):
     def Call(self, nArgs: int, nResults: int):
         closure = self.stack.get(-(nArgs + 1))
         if isinstance(closure, LuaClosure):
-            if closure.value is not None:
+            if closure.pyFunc is None:
                 print("call {}<{},{}>".format(closure.value.source, closure.value.lineDef, closure.value.lastLineDef))
                 self.callLuaClosure(nArgs, nResults, closure)
             else:
@@ -397,7 +401,7 @@ class LuaState(LuaVM):
     def callLuaClosure(self, nArgs: int, nResults: int, closure: LuaClosure):
         nRegs = closure.value.maxStackSize
         nParams = closure.value.numParms
-        newStack = LuaStack(nRegs + 20)
+        newStack = LuaStack(nRegs + 20, self)
         newStack.closure = closure
         funcAndArgs = self.stack.popN(nArgs + 1)
         newStack.pushN(funcAndArgs[1:], nParams)
@@ -409,13 +413,13 @@ class LuaState(LuaVM):
         self.popLuaStack()
 
     def callPyClosure(self, nArgs: int, nResults: int, closure: LuaClosure):
-        newStack = LuaStack(nArgs + 20)
+        newStack = LuaStack(nArgs + 20,self)
         newStack.closure = closure
         args = self.stack.popN(nArgs)
         newStack.pushN(args, nArgs)
         self.stack.pop()
         self.pushLuaStack(newStack)
-        result = closure.pyFunc()
+        result = closure.pyFunc(self)
         self.popLuaStack()
         if nResults is not 0:
             results = newStack.popN(result)
@@ -443,3 +447,19 @@ class LuaState(LuaVM):
             inst.execute(self)
             if inst.getOpcode() is OPCODE.OP_RETURN.value:
                 break
+
+    def PushGlobalTable(self):
+        globalValue = self.registry.get(LuaState.T_LUA_RIDX_GLOBALS)
+        self.stack.push(globalValue)
+
+    def GetBlobal(self, name: LuaString):
+        return self.getTable(self.registry.get(LuaState.T_LUA_RIDX_GLOBALS), name)
+
+    def SetGlobal(self, name: LuaString):
+        table = self.registry.get(LuaState.T_LUA_RIDX_GLOBALS)
+        value = self.stack.pop()
+        self.setTable(table, name, value)
+
+    def Register(self, name:LuaString, func):
+        self.PushPyFunction(func)
+        self.SetGlobal(name)

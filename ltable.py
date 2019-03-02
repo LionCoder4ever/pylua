@@ -1,7 +1,7 @@
 import collections
 
 from lmath import FloatToInteger
-from lvalue import LuaValue, LUATYPE
+from lvalue import LuaValue, LUATYPE, LuaNil
 
 
 class LuaDict(collections.Mapping):
@@ -13,10 +13,15 @@ class LuaDict(collections.Mapping):
             raise TypeError('key must be instance of LuaValue')
         if not isinstance(value, LuaValue):
             raise TypeError('value must be instance of  LuaValue')
-        self.map[key] = value
+        if key.typeOf() is LUATYPE.LUA_TSTRING.value:
+            self.map[key.value] = value
+        else:
+            self.map[key] = value
 
     def __getitem__(self, item):
-        return self.map.get(item)
+        if item.typeOf() is LUATYPE.LUA_TSTRING.value:
+            item = item.value
+        return self.map.get(item,LuaNil())
 
     def __iter__(self):
         return iter(self.map)

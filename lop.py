@@ -519,6 +519,15 @@ class Instruction:
         vm.GetTable(b)
         vm.Replace(a)
 
+    def gettabup(self, vm: LuaVM):
+        a,_,c = self.getAbc()
+        a += 1
+        vm.PushGlobalTable()
+        vm.GetRk(c)
+        vm.GetTable(-2)
+        vm.Replace(a)
+        vm.Pop(1)
+
     def execute(self, vm: LuaVM):
         action = getattr(self, str.lower(opcodes[self.getOpcode()].name))
         if action is not None:
