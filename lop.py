@@ -185,8 +185,7 @@ class Instruction:
         a, sBx = self.getAsbx()
         vm.AddPC(sBx)
         if a != 0:
-            # TODO add upvalue support
-            raise RuntimeError('reference to upvalue')
+            vm.CloseUpValues(a)
 
     def loadnil(self, vm):
         """
@@ -427,7 +426,7 @@ class Instruction:
         vm.CheckStack(1)
         index = c * LuaTable.LFIELDS_PER_FLUSH
 
-        for i in range(1,b+1):
+        for i in range(1, b + 1):
             index += 1
             vm.PushValue(a + i)
             vm.SetI(a, index)
@@ -520,13 +519,31 @@ class Instruction:
         vm.Replace(a)
 
     def gettabup(self, vm: LuaVM):
-        a,_,c = self.getAbc()
+        a, b, c = self.getAbc()
         a += 1
-        vm.PushGlobalTable()
+        b += 1
         vm.GetRk(c)
-        vm.GetTable(-2)
+        vm.GetTable(vm.LuaUpvalueIndex(b))
         vm.Replace(a)
-        vm.Pop(1)
+
+    def settabup(self, vm: LuaVM):
+        a, b, c = self.getAbc()
+        a += 1
+        vm.GetRk(b)
+        vm.GetRk(c)
+        vm.SetTable(vm.LuaUpvalueIndex(a))
+
+    def getupval(self, vm: LuaVM):
+        a, b, _ = self.getAbc()
+        a += 1
+        b += 1
+        vm.Copy(vm.LuaUpvalueIndex(b), a)
+
+    def setupval(self, vm: LuaVM):
+        a, b, _ = self.getAbc()
+        a += 1
+        b += 1
+        vm.Copy(a,vm.LuaUpvalueIndex(b))
 
     def execute(self, vm: LuaVM):
         action = getattr(self, str.lower(opcodes[self.getOpcode()].name))
