@@ -203,6 +203,7 @@ class LuaString(LuaValue):
 
 
 class LuaClosure(LuaValue):
-    def __init__(self, proto: Proto, pyFunc = None):
+    def __init__(self, proto: Proto, pyFunc=None):
         super().__init__(LUATYPE.LUA_TFUNCTION.value, proto if proto is not None else pyFunc)
         self.pyFunc = pyFunc
+        self.upvalues = proto.upvalues if proto is not None else []

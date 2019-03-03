@@ -38,6 +38,7 @@ class LuaStack:
         self.varargs = None
         self.pc = 0
         self.ls = ls
+        self.openuvs = {}
 
     def check(self, n):
         free = len(self.slots) - self.top
@@ -85,12 +86,22 @@ class LuaStack:
         return index if index >= 0 else index + self.top + 1
 
     def isValid(self, index):
+        if index < LuaState.LUA_REGISTRYINDEX:
+            uvindex = LuaState.LUA_REGISTRYINDEX - index - 1
+            c = self.closure
+            return (c is not None) and (uvindex < len(c.upvalues))
         if index is LuaState.LUA_REGISTRYINDEX:
             return True
         absIndex = self.absIndex(index)
         return absIndex and 0 < absIndex <= self.top
 
     def get(self, index):
+        if index < LuaState.LUA_REGISTRYINDEX:
+            uvindex = LuaState.LUA_REGISTRYINDEX - index - 1
+            c = self.closure
+            if (c is None) or (uvindex >= len(c.upvalues)):
+                return LuaNil()
+            return c.upvalues[uvindex]
         if index is LuaState.LUA_REGISTRYINDEX:
             return self.ls.registry
         absIndex = self.absIndex(index)
@@ -100,6 +111,12 @@ class LuaStack:
         return None
 
     def set(self, index, luavalue):
+        if index < LuaState.LUA_REGISTRYINDEX:
+            uvindex = LuaState.LUA_REGISTRYINDEX - index - 1
+            c = self.closure
+            if (c is not None) and (uvindex < len(c.upvalues)):
+                c.upvalues[uvindex] = luavalue
+            return
         if index is LuaState.LUA_REGISTRYINDEX:
             self.ls.registry = luavalue
             return
@@ -384,14 +401,18 @@ class LuaState(LuaVM):
         handleFile = HandleFile(chunk)
         handleFile.readHead()
         proto = handleFile.readProtos(0)
-        self.stack.push(LuaClosure(proto))
+        closure = LuaClosure(proto)
+        self.stack.push(closure)
+        if len(proto.upvalues) > 0:
+            env = self.registry.get(LuaState.T_LUA_RIDX_GLOBALS)
+            closure.upvalues[0] = env
         return 0
 
     def Call(self, nArgs: int, nResults: int):
         closure = self.stack.get(-(nArgs + 1))
         if isinstance(closure, LuaClosure):
             if closure.pyFunc is None:
-                print("call {}<{},{}>".format(closure.value.source, closure.value.lineDef, closure.value.lastLineDef))
+                # print("call {}<{},{}>".format(closure.value.source, closure.value.lineDef, closure.value.lastLineDef))
                 self.callLuaClosure(nArgs, nResults, closure)
             else:
                 self.callPyClosure(nArgs, nResults, closure)
@@ -411,6 +432,10 @@ class LuaState(LuaVM):
         self.pushLuaStack(newStack)
         self.runLuaClosure()
         self.popLuaStack()
+        if nResults is not 0 :
+            results = newStack.popN(newStack.top - nRegs)
+            self.stack.check(len(results))
+            self.stack.pushN(results, nResults)
 
     def callPyClosure(self, nArgs: int, nResults: int, closure: LuaClosure):
         newStack = LuaStack(nArgs + 20,self)
@@ -428,6 +453,15 @@ class LuaState(LuaVM):
 
     def PushPyFunction(self, func):
         self.stack.push(LuaClosure(None, func))
+
+    def PushPyClosure(self, func, num:int):
+        closure = LuaClosure(None, func, num)
+        for i in range(num - 1, -1, -1):
+            closure.upvalues[i] = self.stack.pop()
+        self.stack.push(closure)
+
+    def LuaUpvalueIndex(self, i:int):
+        return LuaState.LUA_REGISTRYINDEX - i
 
     def IsPyFunction(self, index: int):
         value = self.stack.get(index)
@@ -463,3 +497,10 @@ class LuaState(LuaVM):
     def Register(self, name:LuaString, func):
         self.PushPyFunction(func)
         self.SetGlobal(name)
+
+    def CloseUpValues(self, num:int):
+        for i in range(len(self.stack.openuvs)):
+            # item = self.stack.openuvs[i]
+            if i >= num - 1:
+                del self.stack.openuvs[i]
+
