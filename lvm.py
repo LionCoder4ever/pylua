@@ -37,8 +37,8 @@ class LuaVM:
         proto = self.stack.closure.value.protos[index]
         closure = LuaClosure(proto)
         self.stack.push(closure)
-        for i in range(len(closure.upvalues)):
-            upvalueItem = closure.upvalues[i]
+        for i in range(len(proto.upvalues)):
+            upvalueItem = proto.upvalues[i]
             if upvalueItem[0] is 1:
                 if self.stack.openuvs is None:
                     self.stack.openuvs = {}
