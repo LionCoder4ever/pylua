@@ -22,5 +22,13 @@ class TestLuaVMTableApi(unittest.TestCase, TestHelper):
         self.assertEqual(self.getValueInStack(-1), 'cBaBar3')
 
 
+class TestLuaVMUpValueApi(unittest.TestCase, TestHelper):
+    @classmethod
+    def setUpClass(cls):
+        cls.setUpFuncForVm('closure.out')
+
+    def test_tableresult(self):
+        self.assertEqual(self.getValueInStack(-1), 2.0)
+
 if __name__ == '__main__':
     unittest.main()
