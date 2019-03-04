@@ -27,7 +27,7 @@ class TestLuaVMUpValueApi(unittest.TestCase, TestHelper):
     def setUpClass(cls):
         cls.setUpFuncForVm('closure.out')
 
-    def test_tableresult(self):
+    def test_upvalueresult(self):
         self.assertEqual(self.getValueInStack(-1), 2.0)
 
 if __name__ == '__main__':
